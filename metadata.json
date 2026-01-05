@@ -1,0 +1,7 @@
+{
+  "name": "DesignAI - 创意定制平台",
+  "description": "一个AI驱动的设计创意与产品定制平台，支持鼠标垫、手机壳、T恤等品类的AI辅助设计、实景预览及闭环生产定制。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
