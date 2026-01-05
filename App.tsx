@@ -266,7 +266,6 @@ const WorkspacePage: React.FC<{
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fix handleImageUpload: casting e.target.files to File[] to prevent 'unknown' to 'Blob' error during reader.readAsDataURL(file)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
     if (images.length + files.length > 5) {
@@ -295,7 +294,6 @@ const WorkspacePage: React.FC<{
       const { designUrl, mockupUrl } = await generateDesignPair(prompt, selectedCat, selectedStyle.promptSuffix, images);
       onGenerated({ id: Math.random().toString(36).substr(2, 9), imageUrl: designUrl, mockupUrl: mockupUrl, category: selectedCat, prompt: prompt, isPublic: false, likes: 0, uses: 0, orders: 0, author: 'Me', createdAt: Date.now() });
       deductPoints();
-      setImages([]); // 生成成功后清空参考图
     } catch (e) { alert("AI 创作繁忙，请稍后再试"); } finally { setLoading(false); }
   };
 
@@ -320,14 +318,23 @@ const WorkspacePage: React.FC<{
       </header>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
-        {[ { title: '工业设计稿', url: lastWork?.imageUrl }, { title: '实景效果图', url: lastWork?.mockupUrl } ].map((v, i) => (
-          <div key={i} className="bg-white rounded-[32px] p-3 border border-gray-100 shadow-sm flex flex-col min-h-[180px]">
-            <p className="text-[9px] font-black text-indigo-300 uppercase mb-2 px-1">{v.title}</p>
-            <div className="flex-1 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden border border-dashed border-gray-200 cursor-zoom-in" onClick={() => v.url && onZoom(v.url)}>
-              {v.url ? <img src={v.url} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-20 italic">等待创作灵感</span>}
-            </div>
+        <div className="bg-white rounded-[32px] p-3 border border-gray-100 shadow-sm flex flex-col min-h-[180px]">
+          <p className="text-[9px] font-black text-indigo-300 uppercase mb-2 px-1">工业设计稿</p>
+          <div className="flex-1 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden border border-dashed border-gray-200 cursor-zoom-in" onClick={() => lastWork?.imageUrl && onZoom(lastWork.imageUrl)}>
+            {lastWork?.imageUrl ? <img src={lastWork.imageUrl} className="w-full h-full object-cover" /> : <span className="text-[10px] opacity-20 italic">等待创作灵感</span>}
           </div>
-        ))}
+        </div>
+        <div className="bg-white rounded-[32px] p-3 border border-gray-100 shadow-sm flex flex-col min-h-[180px] row-span-1">
+          <p className="text-[9px] font-black text-indigo-300 uppercase mb-2 px-1">实景作品集</p>
+          <div className="flex-1 bg-gray-50 rounded-2xl flex items-center justify-center overflow-hidden border border-dashed border-gray-200 cursor-zoom-in relative" onClick={() => lastWork?.mockupUrl && onZoom(lastWork.mockupUrl)}>
+            {lastWork?.mockupUrl ? (
+              <img src={lastWork.mockupUrl} className="w-full h-full object-contain bg-white" />
+            ) : (
+              <span className="text-[10px] opacity-20 italic">9:16 作品集演示</span>
+            )}
+            {lastWork?.mockupUrl && <div className="absolute top-2 right-2 bg-black/20 text-white text-[7px] px-1.5 py-0.5 rounded backdrop-blur-md">9:16</div>}
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-[40px] p-5 shadow-2xl border border-gray-100">
@@ -338,7 +345,6 @@ const WorkspacePage: React.FC<{
           <button key={style.id} onClick={() => setSelectedStyle(style)} className={`py-2 rounded-xl text-[10px] font-black border transition-all ${selectedStyle.id === style.id ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm' : 'bg-white border-gray-100 text-gray-300'}`}>{style.name}</button>
         ))}</div>
 
-        {/* 动态参考图预览区 */}
         {images.length > 0 && (
           <div className="flex gap-2 mb-4 overflow-x-auto py-2 px-1 hide-scrollbar bg-gray-50/50 rounded-2xl animate-in slide-in-from-top-2 duration-300">
             {images.map((img, idx) => (
@@ -365,6 +371,9 @@ const WorkspacePage: React.FC<{
               <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span>
               {images.length > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-600 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white">{images.length}</span>}
             </button>
+            {images.length > 0 && (
+               <button onClick={() => { setImages([]); setPrompt(''); }} className="px-3 py-1 text-[9px] font-black text-red-400 bg-red-50 rounded-full border border-red-100 active:scale-95">全部清空</button>
+            )}
           </div>
 
           <button onClick={handleGenerate} disabled={loading || !prompt} className="absolute bottom-3 right-3 w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-xl active:scale-90 disabled:opacity-30 disabled:grayscale">{loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "🚀"}</button>
@@ -399,7 +408,13 @@ const ConfigPage: React.FC<{
 
   const handleUpdatePreview = async () => {
     setRefreshing(true);
-    const specDescs = Object.entries(specs).map(([key, val]) => { const opt = catInfo.options.find(o => o.key === key); const valInfo = opt?.values.find(v => v.value === val); return `${opt?.label}: ${valInfo?.name || val}`; }).join(', ');
+    // 构造更精准的规格描述，避免 AI 误解颜色等属性
+    const specDescs = Object.entries(specs).map(([key, val]) => { 
+      const opt = catInfo.options.find(o => o.key === key); 
+      const valInfo = opt?.values.find(v => v.value === val); 
+      return `【${opt?.label}】变更为 "${valInfo?.name || val}"`; 
+    }).join('; ');
+
     const newMockup = await refreshMockup(work.imageUrl.split(',')[1], work.category, specDescs, mockupUrl.split(',')[1]);
     if (newMockup) setMockupUrl(newMockup);
     setRefreshing(false);
@@ -410,15 +425,18 @@ const ConfigPage: React.FC<{
       <div className="p-4 flex items-center justify-between bg-white/80 backdrop-blur-xl border-b border-gray-50 z-[50]"><button onClick={onBack} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-50 active:scale-90 transition-all">←</button><h2 className="font-black text-lg text-gray-800 italic uppercase tracking-tighter">规格配置 / Specs</h2><div className="flex gap-2"><button onClick={onOpenCart} className="w-10 h-10 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center shadow-sm relative active:scale-90 transition-all"><span className="text-xl">🛒</span>{cartCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white">{cartCount}</span>}</button><button onClick={handleUpdatePreview} disabled={refreshing} className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center shadow-sm active:rotate-180 transition-transform">{refreshing ? <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" /> : '📸'}</button></div></div>
       <div className="flex-1 overflow-y-auto pb-48 relative">
         <SimulatedProgressBar isLoading={refreshing} type="inline" />
-        <div className={`relative aspect-square bg-gray-50 flex items-center justify-center overflow-hidden transition-all ${refreshing ? 'opacity-50 blur-lg' : 'cursor-zoom-in'}`} onClick={() => !refreshing && onZoom(mockupUrl)}><img src={mockupUrl} className="max-w-full max-h-full object-contain" /><div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-black/40 backdrop-blur-md rounded-full text-[8px] font-black text-white/80 uppercase tracking-widest">预览模式</div></div>
-        <div className="p-8 space-y-12"><h2 className="text-xl font-black text-gray-800 tracking-tight italic">参数选配 / Options</h2>{catInfo.options.map(opt => (<div key={opt.key}><label className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-4 block">{opt.label}</label><div className={`grid ${opt.type === 'fabric' ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>{opt.values.map(val => (<button key={val.value} onClick={() => setSpecs(prev => ({ ...prev, [opt.key]: val.value }))} className={`p-4 rounded-[24px] text-[11px] font-black border transition-all ${specs[opt.key] === val.value ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl scale-105 z-10' : 'bg-white text-gray-400 border-gray-100'}`}>{val.name} {val.extraPrice ? `(+¥${val.extraPrice})` : ''}</button>))}</div></div>))}</div>
+        <div className={`relative aspect-[9/16] max-h-[70vh] mx-auto bg-gray-50 flex items-center justify-center overflow-hidden transition-all mt-4 mb-4 shadow-lg rounded-2xl ${refreshing ? 'opacity-50 blur-lg' : 'cursor-zoom-in'}`} onClick={() => !refreshing && onZoom(mockupUrl)}>
+          <img src={mockupUrl} className="max-w-full max-h-full object-contain" />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-black/40 backdrop-blur-md rounded-full text-[8px] font-black text-white/80 uppercase tracking-widest">设计作品集模式 (9:16)</div>
+        </div>
+        <div className="p-8 space-y-12"><h2 className="text-xl font-black text-gray-800 tracking-tight italic">参数选配 / Options</h2>{catInfo.options.map(opt => (<div key={opt.key}><label className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] mb-4 block">{opt.label}</label><div className={`grid ${opt.type === 'fabric' || opt.type === 'select' ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>{opt.values.map(val => (<button key={val.value} onClick={() => setSpecs(prev => ({ ...prev, [opt.key]: val.value }))} className={`p-4 rounded-[24px] text-[11px] font-black border transition-all text-left flex justify-between items-center ${specs[opt.key] === val.value ? 'bg-indigo-600 border-indigo-600 text-white shadow-xl scale-105 z-10' : 'bg-white text-gray-400 border-gray-100'}`}><span>{val.name}</span> <span className="text-[9px] opacity-60 italic">{val.extraPrice ? `+¥${val.extraPrice}` : ''}</span></button>))}</div></div>))}</div>
       </div>
       <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-2xl border-t border-gray-100 p-6 space-y-4 shadow-[0_-15px_40px_rgba(0,0,0,0.05)] z-[20] max-w-md mx-auto"><div className="flex justify-between items-end"><div><p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">预计总额 / Total</p><p className="text-3xl font-black text-indigo-600 tracking-tighter">¥{stats.price}</p></div><div className="text-right"><p className="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">加工时长 / Lead Time</p><p className="text-sm font-black text-gray-800 uppercase italic">预计 {stats.leadTime} 个工作日</p></div></div><div className="flex gap-4"><button onClick={() => onAddToCart({ work, specs, price: stats.price, leadTime: stats.leadTime, mockupUrl })} className="flex-1 h-14 bg-amber-50 text-amber-600 rounded-[20px] font-black text-xs uppercase border border-amber-100 active:scale-95 transition-all">存入购物车</button><button onClick={() => onOrder({ id: '', workId: work.id, category: work.category, imageUrl: mockupUrl, specs, price: stats.price, leadTime: stats.leadTime, status: 'PENDING', qaRecords: [], createdAt: Date.now() })} className="flex-[2] h-14 bg-black text-white rounded-[20px] font-black text-xs uppercase shadow-xl active:scale-95 transition-all">确认下单 →</button></div></div>
     </div>
   );
 };
 
-// --- 其余页面保持逻辑不变 ---
+// --- 其余页面逻辑 ---
 const GalleryPage: React.FC<{ profile: UserProfile; onSelect: (w: UserWork) => void; onDelete: (id: string) => void; onTogglePublic: (id: string) => void; onLike: (id: string) => void; onZoom: (url: string) => void; }> = ({ profile, onSelect, onDelete, onTogglePublic, onLike, onZoom }) => {
   const [activeSubTab, setActiveSubTab] = useState<'my' | 'public'>('my');
   const publicWorks = useMemo(() => (profile.works || []).filter(w => w.isPublic).sort((a, b) => ((b.likes || 0) + (b.uses || 0) * 2 + (b.orders || 0) * 5) - ((a.likes || 0) + (a.uses || 0) * 2 + (a.orders || 0) * 5)), [profile.works]);

@@ -16,35 +16,27 @@ const extractImageBase64 = (response: any): string => {
 
 export const generateDesignPair = async (prompt: string, category: Category, stylePrompt: string, referenceImages: string[] = []) => {
   const catNames = {
-    [Category.TSHIRT]: "T-shirt",
-    [Category.PHONE_CASE]: "Phone Case",
-    [Category.MOUSEPAD]: "Mousepad",
-    [Category.BEDDING]: "Bedding Set"
+    [Category.TSHIRT]: "Professional Fashion T-shirt",
+    [Category.PHONE_CASE]: "Premium Phone Protection Case",
+    [Category.MOUSEPAD]: "High-Performance Gaming Mousepad",
+    [Category.BEDDING]: "Luxury Hotel Collection Bedding"
   };
 
   const modelName = 'gemini-2.5-flash-image';
 
   try {
-    // 构造设计生成的输入部分：包含多张参考图和专业设计指令
     const designParts: any[] = referenceImages.map(img => ({
       inlineData: { data: img.split(',')[1] || img, mimeType: 'image/png' }
     }));
 
-    // 核心提示词：要求 AI 作为专业产品设计师，融合多维信息
-    const designPrompt = `你现在是一位世界顶尖的工业设计师和商业插画师。
+    const designPrompt = `你现在是一位顶级工业视觉顾问。
+    任务：为 ${catNames[category]} 创作一个极致简约的平面生产设计图。
+    需求： "${prompt}"
+    风格： "${stylePrompt}"
     
-    任务：为 ${catNames[category]} 产品创作一个专业的、可直接用于生产的【平面设计图稿】。
-    用户核心需求： "${prompt}"
-    整体视觉风格定位： "${stylePrompt}"
-    
-    参考资料分析要求：
-    1. 深度提取附件图片中的视觉DNA（包括色调、纹理、构图元素或特定符号）。
-    2. 将参考图的视觉风格与用户的文字描述进行高级合成，避免简单的拼接。
-    3. 产出物必须是平面的、高对比度的、干净的2D图形。
-    4. 背景必须为纯白色，确保没有多余的阴影或透视，以便后续进行工业转印。
-    5. 设计需具有商业美感，符合现代审美趋势。
-    
-    输出要求：仅输出平面设计图，严禁包含任何3D产品预览、样机或多余文字。`;
+    规范：
+    1. 产出必须是纯平面、白底、无透视、高分辨率的2D设计稿。
+    2. 深度提取参考图中的核心元素。`;
 
     designParts.push({ text: designPrompt });
 
@@ -54,35 +46,66 @@ export const generateDesignPair = async (prompt: string, category: Category, sty
     });
 
     const designBase64 = extractImageBase64(designResponse);
-    if (!designBase64) throw new Error("Failed to generate professional design draft");
+    if (!designBase64) throw new Error("Failed to generate design");
 
     const designUrl = `data:image/png;base64,${designBase64}`;
 
-    // 样机生成提示词优化
-    let lifestylePrompt = "";
-    if (category === Category.TSHIRT) {
-      lifestylePrompt = `将提供的平面设计图完美地应用到这件T恤样机上。
-      要求：分屏布局。左侧为模特在极简工业风摄影棚穿着该T恤的实拍效果，右侧为T恤的正背面平铺图。
-      光影必须真实，保持8K商业摄影质感。`;
-    } else {
-      lifestylePrompt = `将提供的平面设计图应用到 ${catNames[category]} 产品上。
-      场景：高端商业摄影棚环境，柔和的顶级光影。
-      要求：极致写实，细节达到8K分辨率，展现产品真实质感。`;
+    // --- 极致专业作品集排版逻辑 ---
+    let categoryVision = "";
+    switch (category) {
+      case Category.MOUSEPAD:
+        categoryVision = `
+          【3/4 场景】：一个极简主义的现代工作站桌面，光线柔和。${catNames[category]} 平整铺设，上方放置着昂贵的铝合金键盘。
+          【1/4 渲染】：鼠标垫的边缘微距特写。展示极其精密的缝线工艺、侧面厚度以及背面的防滑橡胶纹理。
+          【要求】：必须强调大尺寸的长方形视觉感，严禁出现手机壳或衣服特征。`;
+        break;
+      case Category.PHONE_CASE:
+        categoryVision = `
+          【3/4 场景】：一只拿着手机的手（或放在精致的大理石台面上），手机背面朝外。展现高端商业摄影风格。
+          【1/4 渲染】：手机壳顶部的 3D 渲染视图。展示完美的摄像头孔位剪裁、侧边独立按键细节、以及内衬的植绒质感。
+          【要求】：严禁图案出现在屏幕上，只能在背面。`;
+        break;
+      case Category.TSHIRT:
+        categoryVision = `
+          【3/4 场景】：一名极具气质的模特在极简白棚中穿着该T恤。构图平衡，类似时尚大牌画册。
+          【1/4 渲染】：T恤领口或袖口的工业特写。展示高支棉的致密纹理、平整的双针走线以及领口罗纹的弹性细节。`;
+        break;
+      case Category.BEDDING:
+        categoryVision = `
+          【3/4 场景】：采光极佳的高端现代卧室。床品铺设平整，透着丝滑的商业摄影感。
+          【1/4 渲染】：枕套边缘或被面局部特写。展示高级隐形拉链工艺和面料的垂坠光泽感。`;
+        break;
     }
+
+    const presentationPrompt = `任务：创作一张 9:16 的【${catNames[category]} 专业设计展示板】。
+    
+    【核心架构：视觉完整体】
+    1. 整体布局：垂直 9:16 杂志布局。上方 3/4 为实景图，下方 1/4 为 3D 技术渲染图。
+    2. 视觉一致性：【关键】上下两个部分展示的必须是【同一个 SKU、同一个品类、同一种材质】。严禁混淆产品品类！
+    3. 摄影标准：
+       - 高级商业摄影风格，模拟 50mm 或 85mm 镜头深度，柔和的影棚灯光（Studio Lighting）。
+       - 色调优雅，背景极简且干净（Off-white 或 Light Gray）。
+    4. 品类细节：${categoryVision}
+    5. 分隔与标注：
+       - 上下两部分由精美、极细的线条和少量工业参数文字优雅地分隔。
+       - 中间或底部标注：SERIES: NICE AI CREATIVE / ITEM: ${catNames[category]}。
+    
+    将提供的设计图完美地、透视准确地应用到产品表面。`;
 
     const mockupResponse = await ai.models.generateContent({
       model: modelName,
       contents: {
         parts: [
           { inlineData: { data: designBase64, mimeType: 'image/png' } },
-          { text: lifestylePrompt },
+          { text: presentationPrompt },
         ],
       },
+      config: {
+        imageConfig: { aspectRatio: "9:16" }
+      }
     });
 
     const mockupBase64 = extractImageBase64(mockupResponse);
-    if (!mockupBase64) throw new Error("Failed to generate lifestyle mockup");
-
     return { designUrl, mockupUrl: `data:image/png;base64,${mockupBase64}` };
   } catch (error) {
     console.error("AI Generation Error:", error);
@@ -90,25 +113,18 @@ export const generateDesignPair = async (prompt: string, category: Category, sty
   }
 };
 
-/**
- * 局部刷新逻辑：保持样机一致性
- */
 export const refreshMockup = async (designBase64: string, category: Category, specDesc: string, referenceMockupBase64: string) => {
-  const catNames = {
-    [Category.TSHIRT]: "T-shirt",
-    [Category.PHONE_CASE]: "Phone Case",
-    [Category.MOUSEPAD]: "Mousepad",
-    [Category.BEDDING]: "Bedding Set"
-  };
-
-  const lifestylePrompt = `严格视觉一致性任务。
-  当前产品：${catNames[category]}。
-  变更需求：根据以下规格修改产品物理属性（如颜色或材质）："${specDesc}"。
+  const lifestylePrompt = `【专业规格更新 - 视觉完整体维护】
   
-  关键约束：
-  1. 必须精准保持第一张参考图（设计稿）中的图案内容、位置和比例不变。
-  2. 必须保持第二张参考图（当前样机）的光影、背景、机位和模特状态不变。
-  3. 仅修改规格相关的颜色或纹理。输出需呈现极致的真实商业质感。`;
+  任务：基于规格 "${specDesc}" 更新 9:16 设计展示板。
+  
+  强制准则：
+  1. **绝对禁令**：禁止改变产品品类。如果当前是 ${category}，则新图中上下两部分必须依然是 ${category}。
+  2. **图案同步**：必须将第一张设计稿的图案精准地应用到产品的对应位置。
+  3. **杂志级质感**：维持 3/4 商业摄影与 1/4 工业细节的布局，保留原有的高级灰色调和专业灯光效果。
+  4. **局部刷新**：仅根据描述修改产品的底色或材质细节，环境氛围不得剧烈变动。
+  
+  请生成更新后的专业展示板图片。`;
 
   try {
     const response = await ai.models.generateContent({
@@ -120,6 +136,9 @@ export const refreshMockup = async (designBase64: string, category: Category, sp
           { text: lifestylePrompt },
         ],
       },
+      config: {
+        imageConfig: { aspectRatio: "9:16" }
+      }
     });
 
     const base64 = extractImageBase64(response);
